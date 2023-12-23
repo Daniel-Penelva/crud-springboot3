@@ -18,6 +18,10 @@ public class Product {
 
     private String name;
 
-    private Number price_in_cents;
+    private Integer price_in_cents;
 
+    public Product(RequestProductDto requestProductDto) {
+        this.name = requestProductDto.name();
+        this.price_in_cents = requestProductDto.price_in_cents();
+    }
 }
