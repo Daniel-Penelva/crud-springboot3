@@ -27,6 +27,13 @@ public class ProductController {
         return ResponseEntity.ok(allProducts);
     }
 
+    // localhost:8080/product/all
+    @GetMapping("/all")
+    public ResponseEntity getAllProductsStatusTrue() {
+        var allProducts = productRepository.findAllByActiveTrue();
+        return ResponseEntity.ok(allProducts);
+    }
+
     // localhost:8080/product/search/{id}
     @GetMapping("/search/{id}")
     public ResponseEntity findByIdProduct(@PathVariable String id){
@@ -92,6 +99,22 @@ public class ProductController {
 
         }else{
             throw  new EntityNotFoundException();
+        }
+    }
+
+    // localhost:8080/product/remove/{id}
+    @DeleteMapping("remove/{id}")
+    @Transactional
+    public ResponseEntity removeProduct(@PathVariable String id){
+        Optional<Product> optionalProduct = productRepository.findById(id);
+
+        if(optionalProduct.isPresent()){
+            Product productDelete = optionalProduct.get();
+            productDelete.setActive(false);
+            return ResponseEntity.noContent().build();
+
+        }else{
+            throw new EntityNotFoundException();
         }
     }
 }
