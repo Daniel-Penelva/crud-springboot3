@@ -235,6 +235,140 @@ Analisando cada parte do código:
 
 Em resumo, a classe `User` é uma entidade persistente que representa usuários em um sistema, integrada com o Spring Security para fornecer informações necessárias durante a autenticação e autorização. O uso de anotações do Lombok reduz a boilerplate do código, e a implementação da interface `UserDetails` permite a integração com o Spring Security.
 
+# Interface UserRepository
+
+A interface `UserRepository` que estende `JpaRepository` e é anotada com `@Repository` que sugere que a interface é parte de uma aplicação Spring que utiliza o Spring Data JPA para interagir com um banco de dados, e que ela é responsável por operações relacionadas à entidade `User`.
+
+```java
+package com.api.crud.repository;
+
+import com.api.crud.domain.user.User;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.stereotype.Repository;
+
+@Repository
+public interface UserRepository extends JpaRepository<User, String> {
+    UserDetails findByLogin(String login);
+}
+```
+
+Principais elementos do script:
+
+1. **`@Repository`:**
+   ```java
+   @Repository
+   ```
+
+   A anotação `@Repository` é uma anotação do Spring que indica que a interface é um componente responsável pelo acesso a dados (um repositório de dados). Isso permite que o Spring trate esta interface como um bean gerenciado, e também habilita a tradução de exceções específicas do banco de dados para exceções mais genéricas do Spring.
+
+2. **`UserRepository` extends `JpaRepository<User, String>`:**
+   ```java
+   public interface UserRepository extends JpaRepository<User, String> {
+   ```
+
+   `UserRepository` estende a interface `JpaRepository`, que é parte do Spring Data JPA. `JpaRepository` fornece métodos convenientes para realizar operações CRUD (Create, Read, Update, Delete) no banco de dados relacionado à entidade `User`. A interface `JpaRepository` tem dois parâmetros genéricos: o tipo da entidade (`User`) e o tipo do identificador (`String`).
+
+3. **Método `findByLogin(String login)`:**
+   ```java
+   UserDetails findByLogin(String login);
+   ```
+
+   Este método declara uma consulta personalizada para encontrar um usuário pelo nome de usuário (`login`). O retorno do método é do tipo `UserDetails`, que é uma interface do Spring Security para representar os detalhes do usuário durante a autenticação e autorização.
+
+   É importante notar que, normalmente, o método deveria retornar uma instância de `UserDetails` específica para o seu domínio, não apenas um `UserDetails`. Se a intenção é retornar um usuário específico do banco de dados e convertê-lo em `UserDetails`, o método pode precisar de uma implementação mais elaborada.
+
+   Se este método for utilizado para autenticação, pode ser necessário verificar se o usuário existe no banco de dados, buscar suas informações e criar um objeto `UserDetails` apropriado.
+
+Em resumo, `UserRepository` é uma interface Spring Data JPA que fornece métodos convenientes para operações relacionadas a usuários no banco de dados. A anotação `@Repository` indica que esta interface é um componente de acesso a dados gerenciado pelo Spring. O método `findByLogin` é uma consulta personalizada para recuperar detalhes do usuário pelo nome de usuário.
+
+# Interface UserDetailsService
+
+A interface `UserDetailsService` é parte do Spring Security e é fundamental para a autenticação de usuários. Ela define um único método chamado `loadUserByUsername`, que deve ser implementado para carregar informações sobre o usuário com base no nome de usuário. O propósito principal do `UserDetailsService` é fornecer ao sistema de autenticação do Spring Security os detalhes necessários do usuário durante o processo de login.
+
+A assinatura da interface `UserDetailsService` é a seguinte:
+
+```java
+public interface UserDetailsService {
+    UserDetails loadUserByUsername(String username) throws UsernameNotFoundException;
+}
+```
+
+Discutindo os detalhes do método `loadUserByUsername`:
+
+- **Parâmetro `username`:** Este é o nome de usuário fornecido durante o processo de autenticação. O objetivo do método é localizar as informações do usuário associadas a esse nome de usuário.
+
+- **Retorno `UserDetails`:** O método retorna uma implementação da interface `UserDetails`. `UserDetails` é uma interface do Spring Security que representa os detalhes do usuário durante a autenticação e autorização. Implementações típicas incluem a classe `User` do Spring Security ou classes personalizadas que implementam `UserDetails`.
+
+- **Exceção `UsernameNotFoundException`:** Esta exceção deve ser lançada se o usuário não for encontrado com base no nome de usuário fornecido. Isso é importante para indicar que o nome de usuário não existe e, portanto, o processo de autenticação não pode ser concluído com sucesso.
+
+A implementação do método `loadUserByUsername` pode variar dependendo da fonte de dados utilizada para armazenar informações do usuário. Em muitos casos, essa implementação envolverá a consulta a um banco de dados para recuperar as informações do usuário.
+
+Vale resssaltar que é preciso anotar a classe que implementa `UserDetailsService` com `@Service` para que o Spring a reconheça como um componente gerenciado. Isso permite a injeção dessa implementação onde for necessário, como no caso de configuração do Spring Security.
+
+# Classe AuthorizationService
+
+Essa é a classe `AuthorizationService` que implementa a interface `UserDetailsService`. 
+
+```java
+package com.api.crud.services;
+
+import com.api.crud.repository.UserRepository;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.core.userdetails.UserDetailsService;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
+import org.springframework.stereotype.Service;
+
+@Service
+public class AuthorizationService implements UserDetailsService {
+
+    @Autowired
+    UserRepository repository;
+
+    @Override
+    public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException { // Carrega as informações sobre o usuário com base no nome de usuário.
+        return repository.findByLogin(username);
+    }
+}
+```
+
+Analisando cada parte do código:
+
+1. **Anotação `@Service`:**
+   ```java
+   @Service
+   ```
+
+   A anotação `@Service` é usada para indicar que a classe é um componente de serviço no contexto do Spring. Isso significa que o Spring irá reconhecê-la como um componente gerenciado, permitindo a injeção de dependências, entre outras funcionalidades.
+
+2. **Implementação da Interface `UserDetailsService`:**
+   ```java
+   public class AuthorizationService implements UserDetailsService {
+   ```
+
+   A classe `AuthorizationService` implementa a interface `UserDetailsService`. Isso significa que ela fornece uma implementação para o método `loadUserByUsername`, que é utilizado pelo Spring Security para carregar as informações do usuário durante o processo de autenticação.
+
+3. **Atributo `repository`:**
+   ```java
+   @Autowired
+   UserRepository repository;
+   ```
+
+   O atributo `repository` é anotado com `@Autowired`, indicando que o Spring deve injetar automaticamente uma instância de `UserRepository` nesse atributo. Isso indica que a classe `AuthorizationService` dependerá do `UserRepository` para obter as informações do usuário durante a autenticação.
+
+4. **Método `loadUserByUsername`:**
+   ```java
+   @Override
+   public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
+       return repository.findByLogin(username);
+   }
+   ```
+
+   Este método é uma implementação do método definido na interface `UserDetailsService`. Ele recebe um nome de usuário como parâmetro e utiliza o método `findByLogin` do `UserRepository` para recuperar as informações do usuário associadas a esse nome de usuário. Em seguida, retorna o resultado diretamente.
+
+É importante notar que a implementação desse método deve retornar uma instância de `UserDetails`. No entanto, a implementação fornecida retorna diretamente o resultado do método `findByLogin`, que é uma instância de `User`. Isso pode funcionar se a classe `User` implementar a interface `UserDetails`, ou se houver uma conversão adequada.
+
 --- 
 
 # Autor
