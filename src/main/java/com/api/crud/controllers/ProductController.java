@@ -1,7 +1,7 @@
 package com.api.crud.controllers;
 
-import com.api.crud.domain.Product;
-import com.api.crud.domain.RequestProductDto;
+import com.api.crud.domain.product.Product;
+import com.api.crud.domain.product.RequestProductDto;
 import com.api.crud.repository.ProductRepository;
 import jakarta.persistence.EntityNotFoundException;
 import jakarta.validation.Valid;

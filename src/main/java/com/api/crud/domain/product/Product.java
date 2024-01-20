@@ -1,4 +1,4 @@
-package com.api.crud.domain;
+package com.api.crud.domain.product;
 
 import jakarta.persistence.*;
 import lombok.*;

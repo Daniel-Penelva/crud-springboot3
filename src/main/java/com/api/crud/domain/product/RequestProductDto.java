@@ -1,4 +1,4 @@
-package com.api.crud.domain;
+package com.api.crud.domain.product;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
