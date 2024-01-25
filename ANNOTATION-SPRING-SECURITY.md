@@ -397,22 +397,39 @@ package com.api.crud.infra.security;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
+import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 
 @Configuration
 @EnableWebSecurity
 public class SecurityConfiguration {
 
-    @Bean
-    public SecurityFilterChain securityFilterChain(HttpSecurity httpSecurity) throws Exception {
-        return httpSecurity.csrf(csrf -> csrf.disable())
-                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-                .authorizeHttpRequests(authorize -> authorize.requestMatchers(HttpMethod.POST, "/product").hasRole("ADMIN").anyRequest().authenticated())
-                .build();
-    }
+   @Bean
+   public SecurityFilterChain securityFilterChain(HttpSecurity httpSecurity) throws Exception {
+      return httpSecurity.csrf(csrf -> csrf.disable())
+              .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+              .authorizeHttpRequests(authorize -> authorize
+                      .requestMatchers(HttpMethod.POST, "/auth/login").permitAll()
+                      .requestMatchers(HttpMethod.POST, "/auth/register").permitAll() // configuração apenas para teste, aqui permite que todos os usuarios possam registrar um novo usuario. Mas o correto seria acessar o BD e modificar um registro do usuario atribuindo o role como ADMIN.
+                      .requestMatchers(HttpMethod.POST, "/product").hasRole("ADMIN").anyRequest().authenticated())
+              .build();
+   }
+
+   @Bean
+   public AuthenticationManager authenticationManager(AuthenticationConfiguration authenticationConfiguration) throws Exception {
+      return authenticationConfiguration.getAuthenticationManager();
+   }
+
+   @Bean
+   public PasswordEncoder passwordEncoder(){ // Faz a criptografia de hash na senha
+      return new BCryptPasswordEncoder();
+   }
 }
 ```
 
@@ -445,9 +462,12 @@ Analisando as principais anotações e métodos do script:
 4. **Configuração do `httpSecurity`:**
    ```java
    return httpSecurity.csrf(csrf -> csrf.disable())
-                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-                .authorizeHttpRequests(authorize -> authorize.requestMatchers(HttpMethod.POST, "/product").hasRole("ADMIN").anyRequest().authenticated())
-                .build();
+              .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+              .authorizeHttpRequests(authorize -> authorize
+                      .requestMatchers(HttpMethod.POST, "/auth/login").permitAll()
+                      .requestMatchers(HttpMethod.POST, "/auth/register").permitAll() 
+                      .requestMatchers(HttpMethod.POST, "/product").hasRole("ADMIN").anyRequest().authenticated())
+              .build();
    ```
 
    - **`.csrf(csrf -> csrf.disable())`:** Desabilita a proteção contra CSRF (Cross-Site Request Forgery). Em alguns casos, desabilitar CSRF pode ser aceitável, mas é importante considerar as implicações de segurança ao fazer isso.
@@ -456,12 +476,211 @@ Analisando as principais anotações e métodos do script:
 
    - **`.authorizeHttpRequests(...)`:** Configura a autorização para as requisições HTTP. No meu exemplo fornecido, há uma autorização específica para requisições HTTP POST para "/product". A configuração indica que apenas usuários com a função (role) "ADMIN" têm permissão para acessar essa URL. Para qualquer outra requisição (`.anyRequest()`), o usuário deve estar autenticado.
 
-   Neste exemplo, o método `securityFilterChain` está configurando a política de segurança para desabilitar CSRF, definir a política de gerenciamento de sessão como STATELESS e autorizar requisições específicas. O retorno é uma instância de `SecurityFilterChain` que encapsula essa configuração.
+   ```java
+   .requestMatchers(HttpMethod.POST, "/auth/login").permitAll()
+   .requestMatchers(HttpMethod.POST, "/auth/register").permitAll()
+   ```
 
-   Vale ressaltar que a configuração exata da `SecurityFilterChain` pode variar de acordo com os requisitos específicos do seu aplicativo. Ela oferece flexibilidade para definir uma ampla gama de políticas de segurança e filtros, adaptando-se às necessidades da sua aplicação.
+   - Essas duas linhas configuram exceções específicas para permitir que determinados endpoints (caminhos) aceitem requisições POST sem autenticação. Analisando cada uma delas:
+
+    **`/auth/login`:**
+   ```java
+   .requestMatchers(HttpMethod.POST, "/auth/login").permitAll()
+   ```
+   - Esta linha configura que qualquer requisição POST para o endpoint `/auth/login` seja permitida sem a necessidade de autenticação. Em outras palavras, ela permite que qualquer usuário, autenticado ou não, acesse o endpoint de login sem restrições.
+
+   **`/auth/register`:**
+   ```java
+   .requestMatchers(HttpMethod.POST, "/auth/register").permitAll()
+   ```
+   - Similar à linha anterior, esta configuração permite que qualquer requisição POST para o endpoint `/auth/register` seja aceita sem autenticação. Isso é útil para permitir que novos usuários se registrem no sistema sem a necessidade de fornecer credenciais de autenticação.
+
+   - Ambas as configurações são usadas para permitir operações de autenticação e registro sem restrições de autenticação, possivelmente para facilitar o teste dessas funcionalidades. No entanto, como mencionado no comentário, essa é uma configuração temporária e, em ambientes de produção, seria mais apropriado implementar uma lógica segura para lidar com a criação de novos usuários e a autenticação.
+
+   - É importante notar que permitir operações sem autenticação, especialmente o registro de novos usuários, pode ter implicações de segurança. Em um ambiente de produção, geralmente deseja implementar uma lógica mais robusta, como a validação de credenciais e a atribuição apropriada de papéis (roles), como mencionado no comentário, para garantir a integridade e a segurança do sistema.
+
+Neste exemplo, o método `securityFilterChain` está configurando a política de segurança para desabilitar CSRF, definir a política de gerenciamento de sessão como STATELESS e autorizar requisições específicas. O retorno é uma instância de `SecurityFilterChain` que encapsula essa configuração.
+
+Vale ressaltar que a configuração exata da `SecurityFilterChain` pode variar de acordo com os requisitos específicos do seu aplicativo. Ela oferece flexibilidade para definir uma ampla gama de políticas de segurança e filtros, adaptando-se às necessidades da sua aplicação.
    
-   É importante notar que este é apenas um exemplo e a configuração de segurança pode variar com base nos requisitos específicos do aplicativo. A implementação real pode envolver outras configurações, como autenticação de usuários, definição de roles, personalização de páginas de login, entre outros. 
+É importante notar que este é apenas um exemplo e a configuração de segurança pode variar com base nos requisitos específicos do aplicativo. A implementação real pode envolver outras configurações, como autenticação de usuários, definição de roles, personalização de páginas de login, entre outros.
 
+5. **Método `authenticationManager`:**
+   ```java
+   @Bean
+   public AuthenticationManager authenticationManager(AuthenticationConfiguration authenticationConfiguration) throws Exception {
+       return authenticationConfiguration.getAuthenticationManager();
+   }
+   ```
+
+   Este método cria e retorna um bean do tipo `AuthenticationManager`. O `AuthenticationManager` é uma interface central no Spring Security que gerencia a autenticação de usuários. O método recebe uma instância de `AuthenticationConfiguration` como parâmetro, que é uma configuração de autenticação fornecida pelo Spring Security.
+
+   A criação do bean `AuthenticationManager` é importante para que ele possa ser injetado em outros componentes ou configurações que precisem dele. Ele é frequentemente usado em configurações de autenticação personalizada.
+
+6. **Método `passwordEncoder`:**
+   ```java
+   @Bean
+   public PasswordEncoder passwordEncoder(){ // Faz a criptografia de hash na senha
+       return new BCryptPasswordEncoder();
+   }
+   ```
+
+   Este método cria e retorna um bean do tipo `PasswordEncoder`. O `PasswordEncoder` é uma interface no Spring Security usada para realizar a criptografia de senha. No exemplo fornecido, está sendo utilizado o `BCryptPasswordEncoder`, que é uma implementação popular que utiliza o algoritmo de hash BCrypt.
+
+   A criptografia de senha é crucial para a segurança de um aplicativo, pois armazena as senhas de forma segura no banco de dados, evitando que senhas em texto plano sejam comprometidas em caso de violação de dados. O `PasswordEncoder` é usado durante o processo de autenticação para comparar a senha fornecida pelo usuário com a senha armazenada no banco de dados.
+
+   Configurar um `PasswordEncoder` como um bean permite que o Spring Security o injete automaticamente onde for necessário no processo de autenticação, garantindo que a senha seja manipulada de maneira segura.
+
+Em resumo, esses métodos adicionados à classe `SecurityConfiguration` são responsáveis por criar beans importantes relacionados à autenticação em um aplicativo Spring Security. O `AuthenticationManager` gerencia o processo de autenticação, enquanto o `PasswordEncoder` realiza a criptografia de senha, promovendo boas práticas de segurança. Ambos são componentes essenciais para garantir um sistema de autenticação robusto e seguro.
+
+# Classe UsernamePasswordAuthenticationToken e BCryptPasswordEncoder
+
+Sobre as classes `UsernamePasswordAuthenticationToken` e `BCryptPasswordEncoder`:
+
+1. **`UsernamePasswordAuthenticationToken`:**
+   - A classe `UsernamePasswordAuthenticationToken` é parte do framework Spring Security e é uma implementação da interface `Authentication`. Ela representa um token de autenticação que contém as credenciais do usuário, como nome de usuário e senha.
+   - Geralmente, é usado para encapsular as credenciais durante o processo de autenticação. Por exemplo, quando um usuário envia suas credenciais (nome de usuário e senha) durante o login, essas informações podem ser encapsuladas em um objeto `UsernamePasswordAuthenticationToken` antes de serem processadas pelo `AuthenticationManager`.
+   - Durante a autenticação, o `AuthenticationManager` verifica as credenciais fornecidas e, se a autenticação for bem-sucedida, cria um objeto `Authentication` que inclui um `UsernamePasswordAuthenticationToken` entre outras informações.
+
+2. **`BCryptPasswordEncoder`:**
+   - A classe `BCryptPasswordEncoder` é uma implementação da interface `PasswordEncoder` do Spring Security, usada para realizar a criptografia de senhas usando o algoritmo de hash BCrypt.
+   - O BCrypt é um algoritmo de hash projetado para ser computacionalmente intensivo e lento, o que o torna resistente a ataques de força bruta. Ele adiciona automaticamente um "salt" aleatório para cada senha, melhorando a segurança.
+   - No contexto de segurança, ao armazenar senhas no banco de dados, é uma prática recomendada armazenar apenas o hash da senha em vez da senha real. Isso evita que as senhas sejam expostas em caso de violação de dados.
+   - Ao usar o `BCryptPasswordEncoder`, você pode gerar o hash de uma senha antes de armazená-la no banco de dados e comparar esse hash com as senhas fornecidas durante o processo de autenticação.
+
+Exemplo simples de uso do `BCryptPasswordEncoder` para gerar o hash de uma senha:
+
+```java
+String senha = "senha123";
+BCryptPasswordEncoder encoder = new BCryptPasswordEncoder();
+String hashSenha = encoder.encode(senha);
+
+// Agora, você pode armazenar hashSenha no banco de dados
+```
+
+Ao comparar senhas durante a autenticação, você usa o método `matches` do `BCryptPasswordEncoder`:
+
+```java
+String senhaDigitada = "senhaDigitadaPeloUsuario";
+if (encoder.matches(senhaDigitada, hashSenhaDoBancoDeDados)) {
+    // A senha fornecida está correta
+} else {
+    // A senha fornecida está incorreta
+}
+```
+
+Essas classes são componentes-chave em cenários de autenticação segura em aplicativos Spring Security, fornecendo funcionalidades essenciais para lidar com credenciais de usuários e garantindo a segurança da senha no armazenamento.
+
+# Classe AuthenticationController
+
+Essa classe representa um controlador (`AuthenticationController`) em uma aplicação Spring Boot com Spring Security. Este controlador lida com operações de autenticação, como login e registro de usuários. 
+
+```java
+package com.api.crud.controllers;
+
+import com.api.crud.domain.user.AuthenticationDto;
+import com.api.crud.domain.user.RegisterDto;
+import com.api.crud.domain.user.User;
+import com.api.crud.repository.UserRepository;
+import jakarta.validation.Valid;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+@RestController
+@RequestMapping("auth")
+public class AuthenticationController {
+
+    /* Classe que valida se os usuários estão autenticados para que consigam acessar os endpoints (métodos HTTP) que estão privados. Nessa classe terá
+    * um endpoint de validação para validar os usuários, ou seja, um endpoint onde o usuário fará o login, passando o login e a senha para validar seu acesso,
+    * nele será passado um token. */
+
+    @Autowired
+    private AuthenticationManager authenticationManager;
+
+    @Autowired
+    private UserRepository userRepository;
+
+    // http://localhost:8080/auth/login
+    @PostMapping("/login")
+    public ResponseEntity login(@RequestBody @Valid AuthenticationDto data){
+
+       // Vale ressaltar que não é uma boa prática salvar o valor do password no BD, o correto é salvar o hash dessa senha (criptografia da senha).
+       // Lembrando que as consultas também serão em hash.
+
+       var userNamePassword = new UsernamePasswordAuthenticationToken(data.login(), data.password()); // Criando um objeto UsernamePasswordAuthenticationToken com as credenciais fornecidas (login e senha)
+       var auth = this.authenticationManager.authenticate(userNamePassword); // Autenticando o usuário utilizando o AuthenticationManager
+
+       return ResponseEntity.ok().build(); // Retornando uma resposta HTTP 200 OK se a autenticação for bem-sucedida
+    }
+
+   // http://localhost:8080/auth/register
+   @PostMapping("/register")
+   public ResponseEntity register(@RequestBody @Valid RegisterDto data){ // Esse endpoint no SecurityConfiguration vai ser configurado para que somente o role ADMIN possa criar usuário
+      if(this.userRepository.findByLogin(data.login()) != null) return ResponseEntity.badRequest().build(); // Verificando se já existe um usuário com o mesmo login no banco de dados
+
+      String encryptedPassword = new BCryptPasswordEncoder().encode(data.password()); // Criptografando a senha usando BCryptPasswordEncoder
+
+      User newUser = new User(data.login(), encryptedPassword, data.role()); // Criando um novo usuário com as informações fornecidas (login, senha criptografada e role)
+
+      this.userRepository.save(newUser); // Salvando o novo usuário no banco de dados utilizando o UserRepository
+
+      return ResponseEntity.ok().build(); // Retornando uma resposta HTTP 200 OK se o registro for bem-sucedido
+   }
+
+}
+```
+
+Principais características da classe:
+
+1. **`@RestController` e `@RequestMapping("auth")`:**
+   ```java
+   @RestController
+   @RequestMapping("auth")
+   ```
+
+   Essas anotações definem a classe `AuthenticationController` como um controlador REST que lida com requisições relacionadas à autenticação. O prefixo `/auth` especifica o caminho base para todos os endpoints definidos nesta classe.
+
+2. **Injeção de Dependências:**
+   ```java
+   @Autowired
+   private AuthenticationManager authenticationManager;
+
+   @Autowired
+   private UserRepository userRepository;
+   ```
+
+   Duas dependências são injetadas no controlador: `AuthenticationManager` e `UserRepository`. A primeira é necessária para realizar a autenticação dos usuários, enquanto a segunda é utilizada para acessar o banco de dados e realizar operações relacionadas aos usuários.
+
+3. **Endpoint `/auth/login`:**
+   ```java
+   @PostMapping("/login")
+   public ResponseEntity login(@RequestBody @Valid AuthenticationDto data){
+       // ...
+       return ResponseEntity.ok().build();
+   }
+   ```
+
+   Este método trata requisições POST para o endpoint `/auth/login`. Ele recebe um objeto `AuthenticationDto` do corpo da requisição, que contém informações de login (como login e senha). O método utiliza o `AuthenticationManager` para autenticar o usuário através do `UsernamePasswordAuthenticationToken`. Se a autenticação for bem-sucedida, uma resposta `200 OK` é retornada. No entanto, neste exemplo, não está sendo retornado nenhum token ou informação de autenticação, o que seria necessário em uma aplicação real.
+
+4. **Endpoint `/auth/register`:**
+   ```java
+   @PostMapping("/register")
+   public ResponseEntity register(@RequestBody @Valid RegisterDto data){
+       // ...
+       return ResponseEntity.ok().build();
+   }
+   ```
+
+   Este método trata requisições POST para o endpoint `/auth/register`. Ele recebe um objeto `RegisterDto` do corpo da requisição, que contém informações necessárias para registrar um novo usuário (como login, senha e role). O método verifica se já existe um usuário com o mesmo login no banco de dados. Se não houver, ele criptografa a senha usando o BCryptPasswordEncoder, cria uma nova instância de `User` e a salva no banco de dados usando o `UserRepository`. Uma resposta `200 OK` é retornada se o registro for bem-sucedido.
+
+É importante notar que a prática de salvar senhas no banco de dados em texto plano não é segura. No entanto, neste exemplo, você está usando o BCryptPasswordEncoder para criptografar as senhas antes de armazená-las. Em um ambiente de produção, é altamente recomendável usar boas práticas de segurança, como armazenar apenas hashes de senhas devidamente seguros e utilizar HTTPS para proteger as informações durante a transmissão.
 --- 
 
 # Autor
