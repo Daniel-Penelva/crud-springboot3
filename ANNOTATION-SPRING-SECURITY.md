@@ -418,6 +418,7 @@ public class SecurityConfiguration {
                       .requestMatchers(HttpMethod.POST, "/auth/login").permitAll()
                       .requestMatchers(HttpMethod.POST, "/auth/register").permitAll() // configuração apenas para teste, aqui permite que todos os usuarios possam registrar um novo usuario. Mas o correto seria acessar o BD e modificar um registro do usuario atribuindo o role como ADMIN.
                       .requestMatchers(HttpMethod.POST, "/product").hasRole("ADMIN").anyRequest().authenticated())
+              .addFilterBefore(securityFilter, UsernamePasswordAuthenticationFilter.class)
               .build();
    }
 
@@ -467,6 +468,7 @@ Analisando as principais anotações e métodos do script:
                       .requestMatchers(HttpMethod.POST, "/auth/login").permitAll()
                       .requestMatchers(HttpMethod.POST, "/auth/register").permitAll() 
                       .requestMatchers(HttpMethod.POST, "/product").hasRole("ADMIN").anyRequest().authenticated())
+              .addFilterBefore(securityFilter, UsernamePasswordAuthenticationFilter.class)
               .build();
    ```
 
@@ -499,11 +501,64 @@ Analisando as principais anotações e métodos do script:
 
    - É importante notar que permitir operações sem autenticação, especialmente o registro de novos usuários, pode ter implicações de segurança. Em um ambiente de produção, geralmente deseja implementar uma lógica mais robusta, como a validação de credenciais e a atribuição apropriada de papéis (roles), como mencionado no comentário, para garantir a integridade e a segurança do sistema.
 
+   **`/product`:**
+
+   ```java
+    .requestMatchers(HttpMethod.POST, "/product").hasRole("ADMIN").anyRequest().authenticated()
+   ```
+   - Esta linha faz parte da configuração de autorização do Spring Security e define as permissões de acesso para o endpoint `/product` quando a requisição é um método `POST`. Analisando cada parte:
+
+   **`.requestMatchers(HttpMethod.POST, "/product")`**:
+   - Especifica que as configurações de autorização seguintes se aplicam somente às requisições HTTP com o método `POST` para o endpoint `/product`.
+
+   **`.hasRole("ADMIN")`**:
+   - Exige que o usuário autenticado tenha a role (papel) "ADMIN". As roles são uma forma comum de atribuir permissões aos usuários em sistemas baseados em Spring Security.
+
+   **`.anyRequest().authenticated()`**:
+   - Para qualquer outra requisição que não se enquadre nas condições anteriores, exige que o usuário esteja autenticado. Isso significa que, para qualquer outro endpoint além de `/product` com método `POST`, o usuário precisa estar autenticado.
+
+   - Em resumo, esta linha está configurando as permissões para o endpoint `/product` quando a requisição é um método `POST`. Para acessar esse endpoint, o usuário precisa estar autenticado e ter a role "ADMIN". Para outros endpoints e métodos, é exigida apenas a autenticação, sem uma exigência específica de role. Isso é uma prática comum em sistemas onde certos endpoints, como operações de administração, exigem permissões mais elevadas.
+
+
+   **`addFilterBefore()`:**
+   ```java
+   .addFilterBefore(securityFilter, UsernamePasswordAuthenticationFilter.class)
+   ```
+   - Essa linha adicionada `.addFilterBefore(securityFilter, UsernamePasswordAuthenticationFilter.class)` está incluindo o meu filtro personalizado `securityFilter` antes do `UsernamePasswordAuthenticationFilter` na cadeia de filtros do Spring Security. Entendendo o que isso significa:
+
+   - **`.addFilterBefore(securityFilter, UsernamePasswordAuthenticationFilter.class)`**:
+
+   - Este método é utilizado para adicionar um filtro personalizado (`securityFilter`) antes de um filtro específico na cadeia de filtros do Spring Security.
+
+   - `securityFilter` é uma instância do meu filtro personalizado, que estende `OncePerRequestFilter`.
+
+   - `UsernamePasswordAuthenticationFilter.class` é a classe do filtro padrão do Spring Security responsável pelo processamento da autenticação baseada em nome de usuário e senha.
+
+   **Razão para Adicionar o Filtro Personalizado Antes do Filtro Padrão**:
+
+   - Ao adicionar meu filtro personalizado antes do `UsernamePasswordAuthenticationFilter`, estou indicando que desejo que meu filtro seja executado antes do filtro padrão de autenticação por nome de usuário e senha.
+
+   - Isso é útil quando precisa personalizar ou estender a lógica de autenticação padrão do Spring Security. O meu filtro pode executar operações adicionais antes do filtro padrão ser acionado.
+
+   - Em muitos casos, isso é usado para a validação de tokens JWT, onde o filtro personalizado verifica se um token está presente na solicitação antes de permitir que o filtro padrão de autenticação por nome de usuário e senha prossiga.
+
+   - Ao Adicionar meu filtro antes do filtro padrão permite que tenha controle sobre a lógica de autenticação personalizada antes que o Spring Security tente autenticar com base em credenciais de nome de usuário e senha.
+
+   **Importância da Ordem dos Filtros**:
+
+   - A ordem dos filtros é significativa. A execução dos filtros ocorre na ordem em que são adicionados à cadeia.
+
+   - Ao adicionar um filtro antes de outro, você influencia a ordem de execução. Isso é particularmente importante ao lidar com autenticação personalizada, pois você deseja que a lógica do seu filtro seja aplicada antes da lógica de autenticação padrão.
+
+   - Em resumo, a linha adicionada está configurando a cadeia de filtros do Spring Security para executar primeiro o seu filtro personalizado `securityFilter` antes do filtro padrão `UsernamePasswordAuthenticationFilter`, permitindo a execução da lógica personalizada antes da tentativa de autenticação padrão.
+
 Neste exemplo, o método `securityFilterChain` está configurando a política de segurança para desabilitar CSRF, definir a política de gerenciamento de sessão como STATELESS e autorizar requisições específicas. O retorno é uma instância de `SecurityFilterChain` que encapsula essa configuração.
 
 Vale ressaltar que a configuração exata da `SecurityFilterChain` pode variar de acordo com os requisitos específicos do seu aplicativo. Ela oferece flexibilidade para definir uma ampla gama de políticas de segurança e filtros, adaptando-se às necessidades da sua aplicação.
    
 É importante notar que este é apenas um exemplo e a configuração de segurança pode variar com base nos requisitos específicos do aplicativo. A implementação real pode envolver outras configurações, como autenticação de usuários, definição de roles, personalização de páginas de login, entre outros.
+
+
 
 5. **Método `authenticationManager`:**
    ```java
@@ -847,6 +902,126 @@ api.security.token.secret=${JWT_SECRET:my-secret-key}
 Dessa forma, a configuração proporciona uma maneira flexível de definir a chave secreta utilizada na classe `TokenService`. Se a variável de ambiente `JWT_SECRET` estiver definida no ambiente em que a aplicação está sendo executada, essa será a chave secreta utilizada. Caso contrário, a chave padrão `my-secret-key` será usada.
 
 Essa abordagem é útil em ambientes onde a configuração pode variar, permitindo que a aplicação seja configurada de forma diferente em diferentes ambientes (por exemplo, desenvolvimento, teste e produção) sem a necessidade de modificar o código-fonte.
+
+# Classe SecurityFilter
+
+Esta classe é um filtro de segurança (`SecurityFilter`) que estende a classe `OncePerRequestFilter` do Spring Security.
+
+```java
+package com.api.crud.infra.security;
+
+import com.api.crud.repository.UserRepository;
+import jakarta.servlet.FilterChain;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.stereotype.Component;
+import org.springframework.web.filter.OncePerRequestFilter;
+
+import java.io.IOException;
+
+@Component
+public class SecurityFilter extends OncePerRequestFilter {
+
+   @Autowired
+   TokenService tokenService;
+
+   @Autowired
+   UserRepository userRepository;
+
+   @Override
+   protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain) throws ServletException, IOException {
+
+      var token = this.recoverToken(request); // Recupera o token da requisição
+
+      // Se o token não for nulo, realiza a validação
+      if(token != null){
+         var login = tokenService.validateToken(token); // Valida o token usando o serviço TokenService e recupera o login do usuário
+         UserDetails user = userRepository.findByLogin(login); // Recupera informações do usuário do banco de dados usando o UserRepository
+
+         // Cria uma instância de UsernamePasswordAuthenticationToken com base nas informações do usuário e a define no contexto de segurança usando SecurityContextHolder
+         var authentication = new UsernamePasswordAuthenticationToken(user, null, user.getAuthorities());
+         SecurityContextHolder.getContext().setAuthentication(authentication);
+      }
+      filterChain.doFilter(request, response); // Continua o processamento da requisição
+   }
+
+   private String recoverToken(HttpServletRequest request){ // Método privado para recuperar o token do cabeçalho da requisição
+
+      var authHeader = request.getHeader("Authorization"); // Obtém o valor do cabeçalho "Authorization"
+      if(authHeader == null) return null; // Se o cabeçalho não estiver presente, retorna nulo
+      return authHeader.replace("Bearer ", ""); // Remove a parte "Bearer " do valor do cabeçalho, deixando apenas o token JWT
+   }
+}
+```
+
+Explicações para cada parte do código:
+
+1. **`@Component`**:
+   - A anotação `@Component` indica que a classe `SecurityFilter` é um componente gerenciado pelo contêiner Spring IoC (Inversão de Controle). Isso permite que o Spring o gerencie, injetando as dependências necessárias (anotadas com `@Autowired`) e integrando-o no fluxo de segurança da aplicação.
+
+2. **`extends OncePerRequestFilter`**:
+   - A classe `SecurityFilter` estende `OncePerRequestFilter`, que é uma classe do Spring Security que garante que o filtro seja executado apenas uma vez por cada solicitação HTTP.
+
+3. **Injeção de Dependências**:
+   - As anotações `@Autowired` são usadas para injetar instâncias de `TokenService` e `UserRepository` na classe. Isso é feito automaticamente pelo Spring IoC Container.
+
+4. **`doFilterInternal`**:
+   - Este é o método principal do filtro, onde a lógica de filtragem é implementada.
+   - `doFilterInternal` é chamado para cada solicitação HTTP.
+   - Ele recupera o token do cabeçalho da solicitação, valida o token usando o `TokenService`, e, se válido, recupera as informações do usuário do banco de dados usando o `UserRepository`.
+   - Cria uma instância de `UsernamePasswordAuthenticationToken` com base nas informações do usuário e a define no contexto de segurança usando `SecurityContextHolder`. Isso é feito para que o Spring Security tenha conhecimento sobre a autenticação do usuário.
+   - O método `filterChain.doFilter(request, response)` continua o processamento da solicitação, permitindo que ela siga seu curso normal após o tratamento do filtro.
+
+5. **`recoverToken`**:
+   - Método privado para recuperar o token do cabeçalho da solicitação.
+   - Extrai o token do cabeçalho "Authorization" e remove a parte "Bearer ", deixando apenas o token JWT.
+
+Essencialmente, este filtro atua na validação do token JWT presente nas solicitações HTTP, autenticando o usuário associado ao token e configurando o contexto de segurança para que o Spring Security possa lidar adequadamente com as autorizações subsequentes. Isso é útil em cenários onde a autenticação é baseada em tokens JWT.
+
+# Classe OncePerRequestFilter e SecurityContextHolder
+
+### `OncePerRequestFilter`:
+
+A classe `OncePerRequestFilter` é uma classe fornecida pelo Spring Security que garante que o método `doFilterInternal` seja chamado apenas uma vez por cada solicitação HTTP. Isso é útil para casos em que deseja garantir que o filtro seja executado uma vez, independentemente do número de filtros ou interceptadores que estão no caminho da solicitação.
+
+A assinatura da classe é a seguinte:
+
+```java
+public abstract class OncePerRequestFilter extends GenericFilterBean
+```
+
+### Método `doFilterInternal`:
+
+O método `doFilterInternal` é o ponto de entrada principal para a lógica de filtragem. Aqui, implementa a lógica específica que deseja executar para cada solicitação HTTP. A assinatura do método é a seguinte:
+
+```java
+protected abstract void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain) throws ServletException, IOException;
+```
+
+- `HttpServletRequest request`: Representa a solicitação HTTP recebida pelo servidor.
+- `HttpServletResponse response`: Representa a resposta HTTP que será enviada de volta ao cliente.
+- `FilterChain filterChain`: Representa a cadeia de filtros que será percorrida. Após a execução do método `doFilterInternal`, você geralmente chama `filterChain.doFilter(request, response)` para permitir que a solicitação continue seu processamento.
+
+### `SecurityContextHolder`:
+
+A classe `SecurityContextHolder` é uma parte fundamental do Spring Security. Ela armazena e fornece acesso ao contexto de segurança da aplicação. O contexto de segurança contém informações sobre a autenticação e autorização do usuário.
+
+`SecurityContextHolder` fornece métodos estáticos para obter e definir o contexto de segurança. `getContext()` retorna o contexto de segurança atual, enquanto `setContext()` permite definir um novo contexto.
+
+Exemplo de uso:
+
+```java
+SecurityContextHolder.getContext().setAuthentication(authentication);
+```
+
+Este código define a autenticação (`authentication`) no contexto de segurança atual, permitindo que o Spring Security saiba quem está autenticado.
+
+Em resumo, `OncePerRequestFilter` é uma classe útil para criar filtros no Spring Security, e `SecurityContextHolder` é crucial para gerenciar o contexto de segurança da aplicação. O método `doFilterInternal` é onde implementa a lógica específica do filtro para cada solicitação HTTP.
 
 ---
 
