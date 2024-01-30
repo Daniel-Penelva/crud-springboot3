@@ -634,8 +634,10 @@ Essa classe representa um controlador (`AuthenticationController`) em uma aplica
 package com.api.crud.controllers;
 
 import com.api.crud.domain.user.AuthenticationDto;
+import com.api.crud.domain.user.LoginResponseDto;
 import com.api.crud.domain.user.RegisterDto;
 import com.api.crud.domain.user.User;
+import com.api.crud.infra.security.TokenService;
 import com.api.crud.repository.UserRepository;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -652,28 +654,33 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("auth")
 public class AuthenticationController {
 
-    /* Classe que valida se os usuários estão autenticados para que consigam acessar os endpoints (métodos HTTP) que estão privados. Nessa classe terá
+   /* Classe que valida se os usuários estão autenticados para que consigam acessar os endpoints (métodos HTTP) que estão privados. Nessa classe terá
     * um endpoint de validação para validar os usuários, ou seja, um endpoint onde o usuário fará o login, passando o login e a senha para validar seu acesso,
     * nele será passado um token. */
 
-    @Autowired
-    private AuthenticationManager authenticationManager;
+   @Autowired
+   private AuthenticationManager authenticationManager;
 
-    @Autowired
-    private UserRepository userRepository;
+   @Autowired
+   private UserRepository userRepository;
 
-    // http://localhost:8080/auth/login
-    @PostMapping("/login")
-    public ResponseEntity login(@RequestBody @Valid AuthenticationDto data){
+   @Autowired
+   private TokenService tokenService;
 
-       // Vale ressaltar que não é uma boa prática salvar o valor do password no BD, o correto é salvar o hash dessa senha (criptografia da senha).
-       // Lembrando que as consultas também serão em hash.
+   // http://localhost:8080/auth/login
+   @PostMapping("/login")
+   public ResponseEntity login(@RequestBody @Valid AuthenticationDto data){
 
-       var userNamePassword = new UsernamePasswordAuthenticationToken(data.login(), data.password()); // Criando um objeto UsernamePasswordAuthenticationToken com as credenciais fornecidas (login e senha)
-       var auth = this.authenticationManager.authenticate(userNamePassword); // Autenticando o usuário utilizando o AuthenticationManager
+      // Vale ressaltar que não é uma boa prática salvar o valor do password no BD, o correto é salvar o hash dessa senha (criptografia da senha).
+      // Lembrando que as consultas também serão em hash.
 
-       return ResponseEntity.ok().build(); // Retornando uma resposta HTTP 200 OK se a autenticação for bem-sucedida
-    }
+      var userNamePassword = new UsernamePasswordAuthenticationToken(data.login(), data.password()); // Criando um objeto UsernamePasswordAuthenticationToken com as credenciais fornecidas (login e senha)
+      var auth = this.authenticationManager.authenticate(userNamePassword); // Autenticando o usuário utilizando o AuthenticationManager
+
+      var token = tokenService.generateToken((User) auth.getPrincipal());// Adição da linha para gerar um token usando o TokenService
+
+      return ResponseEntity.ok(new LoginResponseDto(token));
+   }
 
    // http://localhost:8080/auth/register
    @PostMapping("/register")
@@ -722,7 +729,33 @@ Principais características da classe:
    }
    ```
 
-   Este método trata requisições POST para o endpoint `/auth/login`. Ele recebe um objeto `AuthenticationDto` do corpo da requisição, que contém informações de login (como login e senha). O método utiliza o `AuthenticationManager` para autenticar o usuário através do `UsernamePasswordAuthenticationToken`. Se a autenticação for bem-sucedida, uma resposta `200 OK` é retornada. No entanto, neste exemplo, não está sendo retornado nenhum token ou informação de autenticação, o que seria necessário em uma aplicação real.
+   Este método trata requisições POST para o endpoint `/auth/login`. Ele recebe um objeto `AuthenticationDto` do corpo da requisição, que contém informações de login (como login e senha). O método utiliza o `AuthenticationManager` para autenticar o usuário através do `UsernamePasswordAuthenticationToken`. 
+   Portanto, este método `login` é responsável por autenticar um usuário com base nas credenciais fornecidas (login e senha) e, se a autenticação for bem-sucedida, gerar um token JWT para o usuário autenticado.
+
+   Explicação linha por linha:
+
+   **`@PostMapping("/login")`**:
+    - Mapeia o método para lidar com solicitações HTTP POST no endpoint "/login".
+
+   **`public ResponseEntity login(@RequestBody @Valid AuthenticationDto data)`**:
+    - O método recebe um objeto `AuthenticationDto` via corpo da requisição, que normalmente contém informações como login e senha.
+
+   **Comentário sobre a segurança da senha**:
+    - Há um comentário destacando que não é uma boa prática salvar o valor da senha no banco de dados diretamente, sugerindo a utilização de hashes para armazenamento seguro de senhas.
+
+   **`var userNamePassword = new UsernamePasswordAuthenticationToken(data.login(), data.password());`**:
+    - Cria um objeto `UsernamePasswordAuthenticationToken` com as credenciais fornecidas (login e senha). Este é um objeto que o Spring Security usa para representar um pedido de autenticação baseado em nome de usuário e senha.
+
+   **`var auth = this.authenticationManager.authenticate(userNamePassword);`**:
+    - Utiliza o `AuthenticationManager` para autenticar o usuário com base no `UsernamePasswordAuthenticationToken`.
+
+   **`var token = tokenService.generateToken((User) auth.getPrincipal());`**:
+    - Gera um token JWT usando o `TokenService`. O método `generateToken` provavelmente utiliza as informações do usuário autenticado (`auth.getPrincipal()`) para incluir detalhes relevantes no token.
+
+   **`return ResponseEntity.ok(new LoginResponseDto(token));`**:
+    - Retorna uma resposta HTTP 200 OK contendo um objeto `LoginResponseDto` que encapsula o token gerado. Isso é feito para fornecer uma estrutura mais rica na resposta, permitindo que informações adicionais sejam incluídas, se necessário.
+
+  Em resumo, esse método implementa a lógica de autenticação para o endpoint "/login". Após a autenticação bem-sucedida, um token JWT é gerado e retornado na resposta.
 
 4. **Endpoint `/auth/register`:**
    ```java

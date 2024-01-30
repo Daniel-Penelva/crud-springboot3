@@ -1,8 +1,10 @@
 package com.api.crud.controllers;
 
 import com.api.crud.domain.user.AuthenticationDto;
+import com.api.crud.domain.user.LoginResponseDto;
 import com.api.crud.domain.user.RegisterDto;
 import com.api.crud.domain.user.User;
+import com.api.crud.infra.security.TokenService;
 import com.api.crud.repository.UserRepository;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -29,6 +31,9 @@ public class AuthenticationController {
     @Autowired
     private UserRepository userRepository;
 
+    @Autowired
+    private TokenService tokenService;
+
     // http://localhost:8080/auth/login
     @PostMapping("/login")
     public ResponseEntity login(@RequestBody @Valid AuthenticationDto data){
@@ -39,7 +44,9 @@ public class AuthenticationController {
         var userNamePassword = new UsernamePasswordAuthenticationToken(data.login(), data.password()); // Criando um objeto UsernamePasswordAuthenticationToken com as credenciais fornecidas (login e senha)
         var auth = this.authenticationManager.authenticate(userNamePassword); // Autenticando o usuário utilizando o AuthenticationManager
 
-        return ResponseEntity.ok().build(); // Retornando uma resposta HTTP 200 OK se a autenticação for bem-sucedida
+        var token = tokenService.generateToken((User) auth.getPrincipal());// Adição da linha para gerar um token usando o TokenService
+
+        return ResponseEntity.ok(new LoginResponseDto(token));
     }
 
     // http://localhost:8080/auth/register
