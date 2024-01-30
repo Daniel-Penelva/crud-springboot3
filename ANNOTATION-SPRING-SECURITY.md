@@ -681,7 +681,174 @@ Principais características da classe:
    Este método trata requisições POST para o endpoint `/auth/register`. Ele recebe um objeto `RegisterDto` do corpo da requisição, que contém informações necessárias para registrar um novo usuário (como login, senha e role). O método verifica se já existe um usuário com o mesmo login no banco de dados. Se não houver, ele criptografa a senha usando o BCryptPasswordEncoder, cria uma nova instância de `User` e a salva no banco de dados usando o `UserRepository`. Uma resposta `200 OK` é retornada se o registro for bem-sucedido.
 
 É importante notar que a prática de salvar senhas no banco de dados em texto plano não é segura. No entanto, neste exemplo, você está usando o BCryptPasswordEncoder para criptografar as senhas antes de armazená-las. Em um ambiente de produção, é altamente recomendável usar boas práticas de segurança, como armazenar apenas hashes de senhas devidamente seguros e utilizar HTTPS para proteger as informações durante a transmissão.
---- 
+
+# Classe TokenService
+
+Essa clase `TokenService` é responsável por gerar e validar tokens JWT (JSON Web Tokens).
+
+```java
+package com.api.crud.infra.security;
+
+import com.api.crud.domain.user.User;
+import com.auth0.jwt.JWT;
+import com.auth0.jwt.algorithms.Algorithm;
+import com.auth0.jwt.exceptions.JWTCreationException;
+import com.auth0.jwt.exceptions.JWTVerificationException;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Service;
+
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
+
+@Service
+public class TokenService {
+
+   /* Classe para gerar os tokens */
+   @Value("${api.security.token.secret}")
+   private String secret;
+
+   public String generateToken(User user) { // Método para gerar um token JWT com base nas informações do usuário
+      try {
+         // Criação de um algoritmo de assinatura usando a chave secreta
+         Algorithm algorithm = Algorithm.HMAC256(secret);
+
+         // Criação do token JWT com informações específicas (emissor, assunto, data de expiração) e assinado
+         String token = JWT.create()
+                 .withIssuer("auth-api")
+                 .withSubject(user.getLogin())
+                 .withExpiresAt(genExpirationDate())
+                 .sign(algorithm);
+
+         return token;
+      } catch (JWTCreationException exception) {
+         throw new RuntimeException("Error while generating token", exception);
+      }
+   }
+
+   public String validateToken(String token){ // Método para validar um token JWT
+      try {
+         // Criação de um algoritmo de verificação usando a chave secreta
+         Algorithm algorithm = Algorithm.HMAC256(secret);
+
+         // Validação do token JWT, obtendo o assunto (normalmente, o login do usuário)
+         return JWT.require(algorithm)
+                 .withIssuer("auth-api")
+                 .build()
+                 .verify(token)
+                 .getSubject();
+      } catch (JWTVerificationException exception){
+         return "";
+      }
+   }
+
+   private Instant genExpirationDate() { // Método privado para gerar a data de expiração do token (2 horas a partir do momento atual)
+      return LocalDateTime.now().plusHours(2).toInstant(ZoneOffset.of("-03:00"));
+   }
+}
+```
+
+Analisando os principais métodos e funcionalidades dessa classe:
+
+1. **`@Service`**:
+   - A anotação `@Service` indica que esta classe é um componente de serviço gerenciado pelo contêiner de Inversão de Controle (IoC) do Spring. Essa anotação é comumente usada para classes que contêm lógica de negócios.
+
+2. **`@Value("${api.security.token.secret}")`**:
+   - A anotação `@Value` é usada para injetar o valor de uma propriedade configurada no arquivo `application.properties` ou `application.yml`.
+   - Neste caso, o valor da propriedade `${api.security.token.secret}` é injetado na variável `secret`. Essa propriedade contém a chave secreta usada para assinar e verificar os tokens JWT.
+
+3. **`generateToken(User user)`**:
+   - Método responsável por gerar um token JWT com base nas informações do usuário.
+   - Utiliza a biblioteca JWT (dependência externa) para criar o token.
+   - O token inclui o emissor (`withIssuer`), o assunto (`withSubject` - normalmente o login do usuário), a data de expiração (`withExpiresAt`), e é assinado com a chave secreta.
+   - Caso ocorra uma exceção durante a criação do token, uma exceção `RuntimeException` é lançada.
+
+4. **`validateToken(String token)`**:
+   - Método responsável por validar um token JWT.
+   - Utiliza a biblioteca JWT para verificar a assinatura e extrair o assunto (normalmente o login do usuário) do token.
+   - Caso ocorra uma exceção durante a validação do token, uma string vazia `""` é retornada.
+
+5. **`genExpirationDate()`**:
+   - Método privado que gera a data de expiração do token.
+   - Neste caso, a data de expiração é definida como 2 horas a partir do momento atual. Isso é útil para garantir que os tokens tenham uma vida útil limitada.
+
+Essa classe é um exemplo de implementação de serviços relacionados a tokens JWT em um contexto de autenticação e autorização. Tokens JWT são frequentemente utilizados para transmitir informações de identidade de forma segura entre o cliente e o servidor.
+
+# Classes Algorithm e JWT
+
+1. **`Algorithm`**:
+
+   - A classe `Algorithm` faz parte da biblioteca `com.auth0:java-jwt`, que é frequentemente usada para trabalhar com tokens JWT em Java.
+   - No contexto do código fornecido, `Algorithm.HMAC256(secret)` cria um objeto `Algorithm` que utiliza o algoritmo HMAC SHA-256 para assinar e verificar tokens. O parâmetro `secret` é a chave secreta usada no processo de assinatura.
+   - O algoritmo HMAC (Hash-based Message Authentication Code) é uma técnica de assinatura que utiliza uma função de hash criptográfica e uma chave secreta para gerar uma assinatura que pode ser verificada pela parte receptora.
+
+2. **`JWT`**:
+
+   - A classe `JWT` é uma parte da mesma biblioteca mencionada anteriormente (`com.auth0:java-jwt`).
+   - Ela fornece métodos para a criação e verificação de tokens JWT.
+   - No método `JWT.create()` está iniciando o processo de criação de um novo token JWT.
+   - No método `JWT.require(algorithm)` está iniciando o processo de verificação de um token JWT, fornecendo o algoritmo necessário para verificar a assinatura.
+   - O método `withIssuer("auth-api")` define o emissor do token como "auth-api". O emissor é uma entidade que emite o token.
+   - O método `withSubject(user.getLogin())` define o assunto do token como o login do usuário. O assunto geralmente representa o principal sobre o qual o token é emitido.
+   - O método `withExpiresAt(genExpirationDate())` define a data de expiração do token usando o método `genExpirationDate()`, que retorna uma data duas horas no futuro.
+   - O método `sign(algorithm)` é usado para assinar o token com o algoritmo especificado, resultando em uma String representando o token JWT.
+   - O método `verify(token).getSubject()` é usado para verificar a assinatura do token e obter o assunto do token, que, neste caso, é interpretado como o login do usuário.
+
+Essas classes simplificam significativamente a criação e verificação de tokens JWT, proporcionando uma maneira fácil e segura de trabalhar com autenticação e autorização baseadas em tokens em aplicações Java.
+
+# Configuração Flexível da Chave Secreta para Tokens JWT 
+
+A propriedade `secret` que está ligada à anotação `@Value("${api.security.token.secret}")` é uma maneira de injetar valores externos, neste caso, uma chave secreta, em uma classe gerenciada pelo Spring, como um componente de serviço.
+
+A anotação `@Value("${api.security.token.secret}")` é uma característica do Spring Framework que permite injetar valores diretamente de propriedades de configuração ou do ambiente. Essa anotação é especialmente útil para injetar configurações externas sem a necessidade de alterar o código-fonte.
+
+```java
+@Service
+public class TokenService {
+
+    /* Classe para gerar os tokens */
+    @Value("${api.security.token.secret}")
+    private String secret;
+
+    // restante do código
+}
+```
+
+Quebrando a explicação:
+
+- **`@Value("${api.security.token.secret}")`**:
+   - `@Value` é uma anotação do Spring usada para injetar valores de propriedades.
+   - `${api.security.token.secret}` é uma expressão SpEL (Spring Expression Language) que representa a chave da propriedade a ser injetada.
+   - `api.security.token.secret` é a chave da propriedade configurada no arquivo `application.properties` ou `application.yml`.
+   - A anotação `@Value` irá buscar o valor correspondente a `api.security.token.secret` no ambiente de execução do Spring (por exemplo, no arquivo de propriedades).
+
+- **`private String secret;`**:
+   - A declaração `private String secret;` é onde o valor injetado será armazenado na classe `TokenService`.
+   - O valor da propriedade configurada será atribuído à variável `secret` durante a inicialização da classe pelo Spring IoC Container.
+
+A ideia por trás disso é manter a chave secreta fora do código-fonte para que possa ser configurada externamente. Isso é importante para questões de segurança, pois a chave secreta é uma informação sensível e não deve ser exposta diretamente no código-fonte.
+
+A propriedade `api.security.token.secret=${JWT_SECRET:my-secret-key}` está relacionada à anotação `@Value("${api.security.token.secret}")` e ao atributo `private String secret;` da classe `TokenService`. Vamos entender o que cada parte dessa configuração faz:
+
+```properties
+api.security.token.secret=${JWT_SECRET:my-secret-key}
+```
+
+- **`api.security.token.secret=${JWT_SECRET:my-secret-key}`**:
+   - `api.security.token.secret` é a chave da propriedade configurada no arquivo `application.properties` ou `application.yml`.
+   - `${JWT_SECRET:my-secret-key}` é uma expressão que utiliza o formato `${property:defaultValue}`.
+   - `JWT_SECRET` é um nome de variável de ambiente (ou propriedade do sistema) que o Spring procura para substituir o valor da propriedade.
+   - Se a variável de ambiente `JWT_SECRET` estiver definida, o valor será substituído por ela; caso contrário, será utilizado o valor padrão `my-secret-key`.
+
+- **`private String secret;`** (na classe `TokenService`):
+   - A declaração `private String secret;` é onde o valor injetado será armazenado na classe `TokenService`.
+   - Durante a inicialização da classe pelo Spring IoC Container, o valor da propriedade configurada será atribuído à variável `secret`.
+
+Dessa forma, a configuração proporciona uma maneira flexível de definir a chave secreta utilizada na classe `TokenService`. Se a variável de ambiente `JWT_SECRET` estiver definida no ambiente em que a aplicação está sendo executada, essa será a chave secreta utilizada. Caso contrário, a chave padrão `my-secret-key` será usada.
+
+Essa abordagem é útil em ambientes onde a configuração pode variar, permitindo que a aplicação seja configurada de forma diferente em diferentes ambientes (por exemplo, desenvolvimento, teste e produção) sem a necessidade de modificar o código-fonte.
+
+---
 
 # Autor
 ## Feito por: `Daniel Penelva de Andrade`
